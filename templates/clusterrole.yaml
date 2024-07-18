@@ -124,6 +124,14 @@ rules:
       - watch
       - get
   - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
     - coordination.k8s.io
     resources:
     - leases
