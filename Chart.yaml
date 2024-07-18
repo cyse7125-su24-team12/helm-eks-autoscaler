@@ -11,8 +11,8 @@ name: cluster-autoscaler
 sources:
   - https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler
 type: application
-version: 1.0.1
+version: 1.0.2
 dependencies:
   - name: metrics-server
-    version: 1.0.1
+    version: 1.0.2
     repository: https://kubernetes-sigs.github.io/metrics-server/
