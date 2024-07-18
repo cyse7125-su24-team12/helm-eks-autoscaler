@@ -1,6 +1,7 @@
 # cluster-autoscaler
 
 Scales Kubernetes worker nodes within autoscaling groups.
+
 ## TL;DR
 
 ```console
