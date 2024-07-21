@@ -389,10 +389,10 @@ pipeline {
             docker buildx ls
 
             # Build and push Docker image for the autoscaler
-            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_AUTOSCALER}:${release_tag} -t ${DOCKERHUB_REPO_AUTOSCALER}:${BUILD_NUMBER} -f ${DOCKER_AUTOSCALER_FILE} --push .
+            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_AUTOSCALER}:v1.30.0 -f ${DOCKER_AUTOSCALER_FILE} --push .
 
             # Build and push Docker image for the metric
-            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_METRICS}:${release_tag} -t ${DOCKERHUB_REPO_METRICS}:${BUILD_NUMBER} -f ${DOCKER_METRICS_FILE} --push .
+            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_METRICS}:v0.7.1 -f ${DOCKER_METRICS_FILE} --push .
 
             # Logout from Docker Hub
             docker logout
