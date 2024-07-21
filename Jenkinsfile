@@ -7,6 +7,13 @@ pipeline {
         GH_TOKEN = credentials('github-pat')
         REPO_NAME = "helm-eks-autoscaler"
         REPO_OWNER = "cyse7125-su24-team12" // Define the repository owner
+        DOCKERHUB_REPO_AUTOSCALER = 'bala699/cluster-autoscaler'
+        DOCKERHUB_REPO_METRICS = 'bala699/metrics-server'
+        BUILD_NUMBER = 'latest'
+        DOCKER_BUILDER_NAME = 'db-autoscaler-builder'
+        // CHANGE THESE CREDS
+        DOCKER_AUTOSCALER_FILE = 'Dockerfile.autoscaler'
+        DOCKER_METRICS_FILE = 'Dockerfile.metrics'
     }
     stages {
         stage('Install helm') {
@@ -277,6 +284,122 @@ pipeline {
                             github-release upload --owner $REPO_OWNER --repo $REPO_NAME --release-id $release_id --release-name $new_release_name 
                         '''
                     }
+                }
+            }
+        }
+        stage('Setup hadolint')
+        {
+            when{
+                expression{
+                    return env.BRANCH_NAME != null
+                }
+            }
+            steps {
+                script {
+                        sh '''
+                        # Check if Hadolint is already installed and at the desired version
+                        if ! command -v hadolint &>/dev/null || [[ "$(hadolint --version)" != *"v2.10.0"* ]]; then
+                            echo "Hadolint not found or not the desired version, installing..."
+                            
+                            # Download Hadolint binary
+                            sudo wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.10.0/hadolint-Linux-x86_64
+                            
+                            # Make it executable
+                            sudo chmod +x /usr/local/bin/hadolint
+                        else
+                            echo "Hadolint is already installed and at the correct version."
+                        fi
+
+                        # Verify installation
+                        hadolint --version
+                        '''
+                    }
+            }
+        }
+        stage('Lint Dockerfile') {
+            when {
+                expression {
+                    // Check if the BRANCH_NAME is null
+                    return env.BRANCH_NAME != null
+                }
+            }
+            steps {
+                script {
+                    echo 'Linting Dockerfile autoscaler'
+                    sh 'hadolint $DOCKER_AUTOSCALER_FILE'
+                }
+                script{
+                    echo 'Linting Dockerfile metics'
+                    sh 'hadolint $DOCKER_METRICS_FILE'
+                }
+
+            }
+        }
+        stage('Build and push the docker image using buildx') {
+            when {
+                expression {
+                    // Check if the BRANCH_NAME is null
+                    return env.BRANCH_NAME == null
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD'),
+                    string(credentialsId: 'github-pat', variable: 'GH_TOKEN')]) {
+                    script {
+                        sh '''
+            # Login to Docker Hub
+            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+            export GITHUB_TOKEN=$GH_TOKEN
+            release_id=$(github-release list --owner $REPO_OWNER  --repo $REPO_NAME | head -n 1 | egrep -o 'id=[0-9]+' | cut -d '=' -f 2)
+            release_tag=$(github-release list --owner $REPO_OWNER --repo $REPO_NAME | head -n 1 | grep -o 'tag_name="[^"]*"' | cut -d '"' -f 2 | sed 's/^v//')
+
+            echo "The extracted release tag is: $release_tag"
+            # Create and use builder instance
+            # Check if the builder 'db-autoscaler-builder' already exists
+            if ! docker buildx ls | grep -q "${DOCKER_BUILDER_NAME}"; then
+                echo "Builder does not exist. Creating builder..."
+                # Create the builder
+                docker buildx create --name "${DOCKER_BUILDER_NAME}" --driver docker-container
+            else
+                echo "Builder already exists."
+            fi
+
+            # Use the builder
+            docker buildx use "${DOCKER_BUILDER_NAME}"
+
+            docker buildx ls
+
+            # Build and push Docker image for the autoscaler
+            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_AUTOSCALER}:${release_tag} -t ${DOCKERHUB_REPO_AUTOSCALER}:${BUILD_NUMBER} -f ${DOCKER_AUTOSCALER_FILE} --push .
+
+            # Build and push Docker image for the metric
+            docker buildx build --platform linux/amd64,linux/arm64 -t ${DOCKERHUB_REPO_METRICS}:${release_tag} -t ${DOCKERHUB_REPO_METRICS}:${BUILD_NUMBER} -f ${DOCKER_METRICS_FILE} --push .
+
+            # Logout from Docker Hub
+            docker logout
+            '''
+                    }
+                }
+            }
+        }
+        stage('Docker clean up'){
+            when{
+                expression{
+                    return env.BRANCH_NAME == null
+                }
+            }
+            steps{
+                script{
+                    sh '''
+                        # Check if the builder "${DOCKER_BUILDER_NAME}" exists
+                        if docker buildx ls | grep -q "${DOCKER_BUILDER_NAME}"; then
+                            echo "Builder exists. Removing builder..."
+                            docker buildx rm "${DOCKER_BUILDER_NAME}"
+                        else
+                            echo "Builder does not exist or already removed."
+                        fi
+                    '''
                 }
             }
         }
