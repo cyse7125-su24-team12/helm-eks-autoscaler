@@ -4,6 +4,7 @@ Scales Kubernetes worker nodes within autoscaling groups.
 
 ## TL;DR
 
+
 ```console
 $ helm repo add autoscaler https://kubernetes.github.io/autoscaler
 
